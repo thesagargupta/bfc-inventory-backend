@@ -30,38 +30,39 @@
 1. Copy the content of the downloaded JSON file
 2. In your `.env` file, set `GOOGLE_SHEETS_CREDENTIALS` to the JSON content (as a single line string)
 
-## 5. Create Google Sheets for Each Branch
+## 5. Create Single Google Sheet
 
-1. Create 3 separate Google Sheets for:
-   - Chandigarh
-   - Delhi
-   - Gurugram
+1. Create ONE Google Sheet (use your Delhi sheet as the main sheet)
+2. Copy the Sheet ID from the URL (the long string between `/d/` and `/edit`)
+3. Add the Sheet ID to your `.env` file:
+   ```
+   DELHI_SHEET_ID=your_delhi_sheet_id
+   ```
 
-2. For each sheet:
-   - Copy the Sheet ID from the URL (the long string between `/d/` and `/edit`)
-   - Add the Sheet ID to your `.env` file:
-     ```
-     CHANDIGARH_SHEET_ID=your_chandigarh_sheet_id
-     DELHI_SHEET_ID=your_delhi_sheet_id
-     GURUGRAM_SHEET_ID=your_gurugram_sheet_id
-     ```
+**Note:** The system will automatically create three sheets/tabs within this single spreadsheet:
+- **Sheet1**: For Chandigarh branch data
+- **Sheet2**: For Delhi branch data  
+- **Sheet3**: For Gurugram branch data
 
-## 6. Share Sheets with Service Account
+## 6. Share Sheet with Service Account
 
-1. For each Google Sheet, click "Share"
+1. For the Google Sheet, click "Share"
 2. Add the service account email (from the JSON file) as an Editor
 3. The service account email looks like: `your-service-account@your-project-id.iam.gserviceaccount.com`
 
 ## 7. Sheet Structure
 
-Each sheet will have the following columns:
+Each sheet/tab will have the following columns:
 - Column A: Category
 - Column B: Item
 - Column C: Quantity (Kg)
 - Column D: Date
 - Column E: Branch
 
-The system will automatically add headers and data to these columns.
+The system will automatically:
+- Create the required sheets (Sheet1, Sheet2, Sheet3) if they don't exist
+- Add headers and data to these columns
+- Route each branch's data to its designated sheet
 
 ## 8. Install Dependencies
 
@@ -73,5 +74,8 @@ npm install googleapis
 ## 9. Test the Setup
 
 1. Start your backend server
-2. Try submitting data through the frontend
-3. Check if the data appears in the corresponding Google Sheet
+2. Try submitting data through the frontend for different branches
+3. Check if the data appears in the corresponding sheets within the single Google Sheet:
+   - Chandigarh data → Sheet1
+   - Delhi data → Sheet2
+   - Gurugram data → Sheet3

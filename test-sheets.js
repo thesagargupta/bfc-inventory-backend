@@ -1,59 +1,107 @@
-// Test script to verify Google Sheets integration
+// Test script to verify Google Sheets integration with single spreadsheet
 require('dotenv').config();
 const { google } = require('googleapis');
 
-const testGoogleSheets = async () => {
+const initializeGoogleSheets = () => {
+  const credentials = JSON.parse(process.env.GOOGLE_SHEETS_CREDENTIALS);
+  const auth = new google.auth.GoogleAuth({
+    credentials,
+    scopes: ['https://www.googleapis.com/auth/spreadsheets']
+  });
+  return google.sheets({ version: 'v4', auth });
+};
+
+// Function to ensure required sheets exist
+const ensureSheetExists = async (sheets, spreadsheetId, sheetName) => {
   try {
-    console.log('Testing Google Sheets integration...');
-    
-    // Initialize Google Sheets API
-    const credentials = JSON.parse(process.env.GOOGLE_SHEETS_CREDENTIALS);
-    const auth = new google.auth.GoogleAuth({
-      credentials,
-      scopes: ['https://www.googleapis.com/auth/spreadsheets']
+    const spreadsheetInfo = await sheets.spreadsheets.get({
+      spreadsheetId: spreadsheetId
     });
+
+    const existingSheets = spreadsheetInfo.data.sheets.map(sheet => sheet.properties.title);
     
-    const sheets = google.sheets({ version: 'v4', auth });
+    if (!existingSheets.includes(sheetName)) {
+      console.log(`Creating sheet: ${sheetName}`);
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: spreadsheetId,
+        resource: {
+          requests: [{
+            addSheet: {
+              properties: {
+                title: sheetName
+              }
+            }
+          }]
+        }
+      });
+      console.log(`✓ Sheet ${sheetName} created successfully`);
+    } else {
+      console.log(`✓ Sheet ${sheetName} already exists`);
+    }
+  } catch (error) {
+    console.error(`Error ensuring sheet ${sheetName} exists:`, error);
+    throw error;
+  }
+};
+
+async function testGoogleSheetsConnection() {
+  try {
+    const sheets = initializeGoogleSheets();
     
-    // Test with Chandigarh sheet (you can change this to test other branches)
-    const testSpreadsheetId = process.env.CHANDIGARH_SHEET_ID;
+    // Test single spreadsheet with multiple sheets
+    const mainSpreadsheetId = process.env.DELHI_SHEET_ID;
+    console.log(`Testing main spreadsheet with ID: ${mainSpreadsheetId}`);
     
-    if (!testSpreadsheetId) {
-      console.error('❌ CHANDIGARH_SHEET_ID not found in environment variables');
+    if (!mainSpreadsheetId) {
+      console.error('❌ DELHI_SHEET_ID not found in environment variables');
       return;
     }
     
-    // Test read operation
-    console.log('Testing read operation...');
-    const readResult = await sheets.spreadsheets.values.get({
-      spreadsheetId: testSpreadsheetId,
-      range: 'Sheet1!A1:E10',
+    const response = await sheets.spreadsheets.get({
+      spreadsheetId: mainSpreadsheetId
     });
     
-    console.log('✅ Successfully connected to Google Sheets!');
-    console.log('Current data:', readResult.data.values || 'No data found');
+    console.log(`✓ Main spreadsheet found: ${response.data.properties.title}`);
     
-    // Test write operation
-    console.log('Testing write operation...');
-    const testData = [
-      ['Category', 'Item', 'Quantity (Kg)', 'Date', 'Branch'],
-      ['Test Category', 'Test Item', '5', new Date().toISOString().split('T')[0], 'Chandigarh']
+    // Test creating sheets for each branch
+    const branchSheets = [
+      { branch: 'Chandigarh', sheetName: 'Sheet1' },
+      { branch: 'Delhi', sheetName: 'Sheet2' },
+      { branch: 'Gurugram', sheetName: 'Sheet3' }
     ];
     
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: testSpreadsheetId,
-      range: 'Sheet1!A1:E2',
-      valueInputOption: 'RAW',
-      requestBody: {
-        values: testData
-      }
-    });
+    for (const { branch, sheetName } of branchSheets) {
+      console.log(`\nTesting ${branch} (${sheetName})...`);
+      
+      // Ensure sheet exists
+      await ensureSheetExists(sheets, mainSpreadsheetId, sheetName);
+      
+      // Test writing sample data
+      const testData = [
+        ['Category', 'Item', 'Quantity (Kg)', 'Date', 'Branch'],
+        ['Test Category', 'Test Item', '5', new Date().toISOString().split('T')[0], branch]
+      ];
+      
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: mainSpreadsheetId,
+        range: `${sheetName}!A1:E2`,
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: testData
+        }
+      });
+      
+      console.log(`✓ Test data written to ${branch} in ${sheetName}`);
+    }
     
-    console.log('✅ Successfully wrote test data to Google Sheets!');
-    console.log('Test completed successfully! 🎉');
+    console.log('\n✅ All tests passed! Single Google Sheet with multiple tabs is working correctly.');
+    console.log('Data structure:');
+    console.log('- Sheet1: Chandigarh branch data');
+    console.log('- Sheet2: Delhi branch data');
+    console.log('- Sheet3: Gurugram branch data');
     
   } catch (error) {
-    console.error('❌ Test failed:', error.message);
+    console.error('❌ Error testing Google Sheets connection:', error.message);
     
     if (error.code === 403) {
       console.error('This is likely a permissions issue. Make sure:');
@@ -62,9 +110,9 @@ const testGoogleSheets = async () => {
     }
     
     if (error.code === 404) {
-      console.error('Spreadsheet not found. Check your SHEET_ID in the .env file');
+      console.error('Spreadsheet not found. Check your DELHI_SHEET_ID in the .env file');
     }
   }
-};
+}
 
-testGoogleSheets();
+testGoogleSheetsConnection();
