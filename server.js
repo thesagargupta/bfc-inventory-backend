@@ -1,5 +1,5 @@
 const express = require('express');
-const nodemailer = require('nodemailer');
+const { google } = require('googleapis');
 const cors = require('cors');
 require('dotenv').config();
 
@@ -15,49 +15,86 @@ const submissionTracker = new Map();
 // Helper to get YYYY-MM-DD string
 const getTodayDateString = () => new Date().toISOString().split('T')[0];
 
-// Endpoint to send email and track submission
-app.post('/send-email', async (req, res) => {
-  const { csv, branch } = req.body;
+// Google Sheets configuration for each branch
+const GOOGLE_SHEETS_CONFIG = {
+  'Chandigarh': {
+    spreadsheetId: process.env.CHANDIGARH_SHEET_ID,
+    range: 'Sheet1!A:E' // Category, Item, Quantity, Date, Branch
+  },
+  'Delhi': {
+    spreadsheetId: process.env.DELHI_SHEET_ID,
+    range: 'Sheet1!A:E'
+  },
+  'Gurugram': {
+    spreadsheetId: process.env.GURUGRAM_SHEET_ID,
+    range: 'Sheet1!A:E'
+  }
+};
 
-  if (!csv || !branch) {
-    return res.status(400).json({ error: 'CSV and branch are required' });
+// Initialize Google Sheets API
+const initializeGoogleSheets = () => {
+  const credentials = JSON.parse(process.env.GOOGLE_SHEETS_CREDENTIALS);
+  const auth = new google.auth.GoogleAuth({
+    credentials,
+    scopes: ['https://www.googleapis.com/auth/spreadsheets']
+  });
+  return google.sheets({ version: 'v4', auth });
+};
+
+// Endpoint to update Google Sheets and track submission
+app.post('/update-sheets', async (req, res) => {
+  const { data, branch } = req.body;
+
+  if (!data || !branch) {
+    return res.status(400).json({ error: 'Data and branch are required' });
+  }
+
+  if (!GOOGLE_SHEETS_CONFIG[branch]) {
+    return res.status(400).json({ error: 'Invalid branch' });
   }
 
   try {
-    // Setup transporter
-    const transporter = nodemailer.createTransport({
-      service: 'gmail', // or your preferred email provider
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
+    const sheets = initializeGoogleSheets();
+    const config = GOOGLE_SHEETS_CONFIG[branch];
+    
+    // Clear existing data (optional - remove if you want to append instead)
+    await sheets.spreadsheets.values.clear({
+      spreadsheetId: config.spreadsheetId,
+      range: config.range,
     });
 
-    // Compose email
-    const mailOptions = {
-      from: `"Inventory App" <${process.env.EMAIL_USER}>`,
-      to: process.env.EMAIL_TO,
-      subject: `Food Inventory - ${branch}`,
-      text: 'Please find attached the latest food inventory.',
-      attachments: [
-        {
-          filename: 'food_inventory.csv',
-          content: csv,
-        },
-      ],
-    };
+    // Prepare data for Google Sheets
+    const values = [
+      ['Category', 'Item', 'Quantity (Kg)', 'Date', 'Branch'], // Headers
+      ...Object.entries(data)
+        .filter(([, val]) => val.quantity)
+        .map(([item, { quantity, category }]) => [
+          category,
+          item,
+          quantity,
+          getTodayDateString(),
+          branch
+        ])
+    ];
 
-    // Send the email
-    await transporter.sendMail(mailOptions);
+    // Update the sheet
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: config.spreadsheetId,
+      range: config.range,
+      valueInputOption: 'RAW',
+      requestBody: {
+        values: values
+      }
+    });
 
     // Save submission date for the branch
     const today = getTodayDateString();
     submissionTracker.set(branch, today);
 
-    res.status(200).json({ message: 'Email sent and submission recorded' });
+    res.status(200).json({ message: 'Google Sheets updated and submission recorded' });
   } catch (err) {
-    console.error('Error sending email:', err);
-    res.status(500).json({ error: 'Failed to send email' });
+    console.error('Error updating Google Sheets:', err);
+    res.status(500).json({ error: 'Failed to update Google Sheets' });
   }
 });
 
