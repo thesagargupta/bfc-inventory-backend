@@ -54,8 +54,13 @@ app.post('/update-sheets', async (req, res) => {
   }
 
   try {
+    console.log(`Attempting to update Google Sheets for branch: ${branch}`);
+    
     const sheets = initializeGoogleSheets();
     const config = GOOGLE_SHEETS_CONFIG[branch];
+    
+    console.log(`Using spreadsheet ID: ${config.spreadsheetId}`);
+    console.log(`Data received:`, data);
     
     // Clear existing data (optional - remove if you want to append instead)
     await sheets.spreadsheets.values.clear({
@@ -77,6 +82,8 @@ app.post('/update-sheets', async (req, res) => {
         ])
     ];
 
+    console.log(`Prepared values for Google Sheets:`, values);
+
     // Update the sheet
     await sheets.spreadsheets.values.update({
       spreadsheetId: config.spreadsheetId,
@@ -87,6 +94,8 @@ app.post('/update-sheets', async (req, res) => {
       }
     });
 
+    console.log(`Successfully updated Google Sheets for branch: ${branch}`);
+
     // Save submission date for the branch
     const today = getTodayDateString();
     submissionTracker.set(branch, today);
@@ -94,7 +103,9 @@ app.post('/update-sheets', async (req, res) => {
     res.status(200).json({ message: 'Google Sheets updated and submission recorded' });
   } catch (err) {
     console.error('Error updating Google Sheets:', err);
-    res.status(500).json({ error: 'Failed to update Google Sheets' });
+    console.error('Error details:', err.message);
+    console.error('Stack trace:', err.stack);
+    res.status(500).json({ error: 'Failed to update Google Sheets: ' + err.message });
   }
 });
 
