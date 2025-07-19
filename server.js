@@ -358,7 +358,13 @@ app.get('/last-submission/:branch', (req, res) => {
   if (!branch) return res.status(400).json({ error: 'Branch is required' });
 
   const lastDate = submissionTracker.get(branch) || null;
-  res.status(200).json({ branch, date: lastDate });
+  const today = getTodayDateString();
+  // If lastDate is not today, reset it
+  // if (lastDate && lastDate !== today) {
+  //   submissionTracker.delete(branch);
+  //   return res.status(200).json({ branch, date: null });
+  // }
+  // res.status(200).json({ branch, date: lastDate });
 });
 
 // Start server
