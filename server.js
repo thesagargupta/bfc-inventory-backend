@@ -22,6 +22,246 @@ const getDateNDaysAgo = (days) => {
   return date.toISOString().split('T')[0];
 };
 
+// Units mapping for each inventory item (copied from frontend Home.jsx)
+const itemUnits = {
+  "Milk": "ml",
+  "Low Fat Butter": "gm",
+  "CREAM": "gm",
+  "Curd": "gm",
+  "Greek Yogurt": "gm",
+  "Paneer": "gm",
+  "Tofu": "gm",
+  "Custard Coolem": "ml",
+  "Ice Cream Milk": "ml",
+  "Ice cube": "gm",
+  "Eggs": "pc",
+  "FISH": "gm",
+  "Chicken Breast": "gm",
+  "Chicken Keema": "gm",
+  "Chicken Wings": "gm",
+  "Brown Bread Jumbo": "pc",
+  "Pizza Base Wheat": "pc",
+  "Burger Bun Wheat": "pc",
+  "Museli": "gm",
+  "ajinomoto": "gm",
+  "dates": "gm",
+  "Aata": "gm",
+  "Maida": "gm",
+  "Bajra Aata": "gm",
+  "Besan": "gm",
+  "Baking Powder": "gm",
+  "Brown Rice": "gm",
+  "White Rice (Golden Sella Double Chabbi)": "gm",
+  "Coffee": "gm",
+  "Pineapple Slice Tin": "gm",
+  "Tomato Puree": "tin",
+  "DryYeist": "gm",
+  "Quinua/ Foxtail / Kudos": "gm",
+  "Couc Cous": "gm",
+  "Red Beans": "gm",
+  "White Kidney Beans": "gm",
+  "Kabuli Chana": "gm",
+  "Moong Whole (Sprouts)": "gm",
+  "Chocolate Syrup": "gm",
+  "Kevada Water": "ml",
+  "Rose Water": "ml",
+  "Mix Seeds (Sunflower, Pumpkin, Flex)": "gm",
+  "Seasme Seeds": "gm",
+  "Chia Seeds": "gm",
+  "Hemp Seeds": "gm",
+  "Jeerawan Powder": "gm",
+  "Sugar": "gm",
+  "Dhania Whole": "gm",
+  "Mustard Seeds": "gm",
+  "Peanuts Raw": "gm",
+  "King Soya Oil": "ml",
+  "Olive Oil": "ml",
+  "Mustard Oil": "ml",
+  "Peanut Butter": "gm",
+  "Coco Powder": "gm",
+  "Poha": "gm",
+  "Oats": "gm",
+  "Rolled Oats": "gm",
+  "Honey": "gm",
+  "Milkmaid": "gm",
+  "Dark Compound": "gm",
+  "Kismish": "gm",
+  "Black Raisin": "gm",
+  "Kaju": "gm",
+  "Magaj": "gm",
+  "Almonds": "gm",
+  "Wallnuts": "gm",
+  "Custard Powder": "gm",
+  "Nachos": "gm",
+  "Beetroot Chips": "gm",
+  "Daliya": "gm",
+  "HOT GARLIC SAUCE": "gm",
+  "Haldiram Salted Peanuts": "gm",
+  "Red Chilly Whole": "gm",
+  "Coconut Milk Powder": "gm",
+  "Coconut Powder": "gm",
+  "Vanilla Frappe": "gm",
+  "Vanilla Essence": "gm",
+  "Parley Ji Buiscuit": "pack",
+  "Black Olives": "gm",
+  "Alipino": "gm",
+  "Oregano": "gm",
+  "Chilly Flakes": "gm",
+  "Black Pepper": "gm",
+  "Rock Salt": "gm",
+  "Salt": "gm",
+  "Haldi": "gm",
+  "Kitchen King": "gm",
+  "Degi Mirch": "gm",
+  "Rajma Masala": "gm",
+  "Jeera": "gm",
+  "Maggi Masala": "gm",
+  "Ghee": "gm",
+  "Badi Elaichi": "gm",
+  "Elachi Powder": "gm",
+  "Staff Rice": "gm",
+  "Staff Tea": "gm",
+  "Phynile": "ml",
+  "Pasta": "gm",
+  "Clove": "gm",
+  "Tej Patta": "gm",
+  "Sooji": "gm",
+  "Smokey Barbeque Masala": "gm",
+  "Chat Masala": "gm",
+  "Chicken Tikka Masala (Shan)": "gm",
+  "Kebab Masala (Shan)": "gm",
+  "Kasturi Methi": "gm",
+  "Biryani Masala": "gm",
+  "Peri Peri Masala": "gm",
+  "Italian Mix Seasoning": "gm",
+  "Garlic Powder": "gm",
+  "Thai Curry Masala": "gm",
+  "Caramel Syrup": "gm",
+  "Cheese Cake Casata Syrup": "gm",
+  "Tomato Ketchup": "gm",
+  "TObasco": "gm",
+  "Vinegar": "gm",
+  "Soya Sauce": "ml",
+  "Teriyaki Sauce": "gm",
+  "Thai Sweet Chilly Sauce": "gm",
+  "Kasundi Mustard": "gm",
+  "English Mustard": "gm",
+  "Barbeque Sauce": "gm",
+  "Thousand Sauce": "gm",
+  "Chilly Garlic Sauce": "gm",
+  "Chipotle Sauce": "gm",
+  "Sweet Onion Sauce": "gm",
+  "Red Chilly Sauce": "gm",
+  "Mayonese": "gm",
+  "Strawberry Crush": "gm",
+  "Blueberry Crush": "gm",
+  "Hazelnut Syrup": "ml",
+  "Cajun Powder": "gm",
+  "Pineapple Juice Tetra": "pack",
+  "Mix Berries Frozen": "gm",
+  "BlueBerries Frozen": "gm",
+  "Strawberry Frozen": "gm",
+  "Soya Tikka Frozen (Vegley)": "gm",
+  "Cheddar Cheese Slice": "pc",
+  "Mozerella Cheese": "gm",
+  "Cheese Block": "gm",
+  "Pancake Mix": "gm",
+  "Origano Mix Sachet": "pack",
+  "Chilly Flakes Sachet": "pack",
+  "sabudana": "gm",
+  "Bhuna Chana": "gm",
+  "Silver Foil": "gm",
+  "soya chunks": "gm",
+  "water": "ltr",
+  "Apple (Imp.)": "gm",
+  "Banana": "pc",
+  "Pomegranate": "gm",
+  "Papaya": "gm",
+  "Watermelon": "gm",
+  "Dragon Fruit": "pc",
+  "Kiwi (zespari)": "gm",
+  "Grapes": "gm",
+  "Red Globe": "gm",
+  "Khajur (Kimia)": "gm",
+  "Orange/Malta": "gm",
+  "Sharda": "gm",
+  "Guvava": "gm",
+  "Pineapple": "gm",
+  "Avacado": "pc",
+  "Pears Indian": "gm",
+  "Aamla": "gm",
+  "Curry Patta": "gm",
+  "arbi": "gm",
+  "Onion": "gm",
+  "Tomato": "gm",
+  "Potato": "gm",
+  "Zuccini": "gm",
+  "Brokli": "gm",
+  "Carrot": "gm",
+  "Beans": "gm",
+  "Cucumber": "gm",
+  "Mushroom": "gm",
+  "Capsicum": "gm",
+  "Lemon": "gm",
+  "Mint": "gm",
+  "Red Cabbage": "gm",
+  "Ice Berg": "gm",
+  "Cherry Tomato": "gm",
+  "Garlic (Peeled)": "gm",
+  "Ginger": "gm",
+  "Pumpkin": "gm",
+  "Celery": "gm",
+  "Basil": "gm",
+  "Sweet Corn (Frozen)": "gm",
+  "Peas (Frozen)": "gm",
+  "Sweet Potato": "gm",
+  "Beetroot": "gm",
+  "Cauliflower": "gm",
+  "Cabbage": "gm",
+  "Parseley": "gm",
+  "Baby Corn": "gm",
+  "Green Chilly": "gm",
+  "Baby Spinach": "gm",
+  "Spinach": "gm",
+  "Bellpepper (Red,Yellow)": "gm",
+  "Coriander": "gm",
+  "Lettuce": "gm",
+  "Spring Onion": "gm",
+  "Kale": "gm",
+  "750 ML Flat Round Paper Container": "pc",
+  "500 ML Flat Round Paper Container": "pc",
+  "350 ML Flat Round Paper Container": "pc",
+  "100 ML Flat Round Paper Container": "pc",
+  "Wooden Spork": "pc",
+  "Sanitizer": "pc",
+  "Tissue": "pc",
+  "Straw Packed": "pc",
+  "Glass Bottle 350 ML": "pc",
+  "Glass Salsa Jar 350 ML": "pc",
+  "Glass Salsa Jar 100 ML": "pc",
+  "Carry Bag": "pc",
+  "Burger Box": "pc",
+  "Pizza Box 10\"": "pc",
+  "Tape": "pc",
+  "Sleeves": "pc",
+  "ButterPaper": "pc",
+  "Kot Roll": "pc",
+  "Whole Wheat Pita": "pc",
+  "beetroot roti": "pc",
+  "beetroot wrap roti": "pc",
+  "Spinach Patty": "pc",
+  "Chop Masala": "gm",
+  "ITALIAN GRAVY": "gm",
+  "pizza sauce": "gm",
+  "indian gravy": "gm",
+  "Spinach Paste": "gm",
+  "salsa sauce": "gm",
+  "Hawaain Dressing": "gm",
+  "chilly lime dressing": "gm",
+  "Mint Sauce": "gm",
+  "peanut sauce": "gm",
+  "Truffles": "gm",
+};
 // Fixed items structure from frontend
 const categoryMap = {
   Dairy: ["Milk", "Low Fat Butter", "CREAM", "Curd", "Greek Yogurt", "Paneer", "Tofu", "Custard Coolem", "Ice Cream Milk", "Ice cube"],
@@ -82,17 +322,17 @@ const categoryMap = {
 const GOOGLE_SHEETS_CONFIG = {
   'Chandigarh': {
     spreadsheetId: process.env.DELHI_SHEET_ID,
-    range: 'Chandigarh!A:I', // A:I to accommodate Category, Item, and 7 date columns
+    range: 'Chandigarh!A:J', // A:J to accommodate Category, Item, Unit, and 7 date columns
     sheetName: 'Chandigarh'
   },
   'Delhi': {
     spreadsheetId: process.env.DELHI_SHEET_ID,
-    range: 'Delhi!A:I',
+    range: 'Delhi!A:J',
     sheetName: 'Delhi'
   },
   'Gurugram': {
     spreadsheetId: process.env.DELHI_SHEET_ID,
-    range: 'Gurugram!A:I',
+    range: 'Gurugram!A:J',
     sheetName: 'Gurugram'
   }
 };
@@ -154,15 +394,17 @@ const initializeSheetStructure = async (sheets, spreadsheetId, sheetName) => {
       dateColumns.push(getDateNDaysAgo(i));
     }
 
+
     // Create fixed structure with all items from all categories
     const fixedData = [
-      ['Category', 'Item', ...dateColumns.map(date => `${date} (Kg)`)] // Headers with 7 date columns
+      ['Category', 'Item', 'Unit', ...dateColumns.map(date => `${date} (Qty)`)] // Headers with 7 date columns
     ];
 
     // Add all items from all categories
     Object.entries(categoryMap).forEach(([category, items]) => {
       items.forEach(item => {
-        fixedData.push([category, item, ...Array(7).fill('')]); // Empty quantities for 7 columns initially
+        const unit = itemUnits[item] || '';
+        fixedData.push([category, item, unit, ...Array(7).fill('')]); // Empty quantities for 7 columns initially
       });
     });
 
@@ -214,7 +456,7 @@ const manageRollingData = async (sheets, spreadsheetId, sheetName, newData) => {
     }
 
     // Create new headers with rolling 7-day date columns (today in C, then yesterday, ...)
-    const newHeaders = ['Category', 'Item', ...dateColumns.map(date => `${date} (Kg)`)];
+    const newHeaders = ['Category', 'Item', 'Unit', ...dateColumns.map(date => `${date} (Qty)`)];
     
     // Extract existing date columns from current headers
     const existingDateColumns = headers.slice(2).map(header => {
@@ -269,21 +511,22 @@ const manageRollingData = async (sheets, spreadsheetId, sheetName, newData) => {
     
     // Build final data structure
     const finalData = [newHeaders];
-    
+
     // Add data rows in fixed category order
     Object.entries(categoryMap).forEach(([category, items]) => {
       items.forEach(item => {
         const key = `${category}-${item}`;
         const itemData = itemDataMap.get(key);
-        
+
         if (itemData) {
-          const row = [category, item];
-          
+          const unit = itemUnits[item] || '';
+          const row = [category, item, unit];
+
           // Add quantities for each date column
           dateColumns.forEach(date => {
             row.push(itemData.dates.get(date) || '');
           });
-          
+
           finalData.push(row);
         }
       });
