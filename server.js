@@ -243,6 +243,8 @@ const itemUnits = {
   "Burger Box": "pc",
   "Pizza Box 10\"": "pc",
   "Tape": "pc",
+  "Cuttlery Pouch": "pc",
+  "Pizza table": "pc",
   "Sleeves": "pc",
   "ButterPaper": "pc",
   "Kot Roll": "pc",
@@ -309,7 +311,7 @@ const categoryMap = {
     "750 ML Flat Round Paper Container", "500 ML Flat Round Paper Container", "350 ML Flat Round Paper Container",
     "100 ML Flat Round Paper Container", "Wooden Spork", "Sanitizer", "Tissue", "Straw Packed",
     "Glass Bottle 350 ML", "Glass Salsa Jar 350 ML", "Glass Salsa Jar 100 ML", "Carry Bag",
-    "Burger Box", "Pizza Box 10\"", "Tape", "Sleeves", "ButterPaper", "Kot Roll"
+    "Burger Box", "Pizza Box 10\"", "Tape", "Sleeves", "ButterPaper", "Kot Roll","Pizza table","Cuttlery Pouch"
   ],
   Mezza: [
     "Whole Wheat Pita", "beetroot roti", "beetroot wrap roti", "Spinach Patty", "Chop Masala",
