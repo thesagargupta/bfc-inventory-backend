@@ -4,11 +4,17 @@ const cors = require('cors');
 require('dotenv').config();
 const mongoose = require('mongoose');
 const multer = require('multer');
+const compression = require('compression');
+const NodeCache = require('node-cache');
 
 const app = express();
 const PORT = 5000;
 
+// Create a new cache object with a standard TTL of 1 hour
+const cache = new NodeCache({ stdTTL: 3600 });
+
 app.use(cors());
+app.use(compression()); // Add compression middleware
 app.use(express.json({ limit: '10mb' }));
 
 // Set up multer for file uploads
@@ -48,7 +54,18 @@ const getDateNDaysAgo = (days) => {
 // API: Get all categories and items (for frontend)
 app.get('/api/categories', async (req, res) => {
   try {
+    // Check if the data is in the cache
+    const cachedCategories = cache.get('categories');
+    if (cachedCategories) {
+      return res.json(cachedCategories);
+    }
+
+    // If not in cache, fetch from the database
     const categories = await Category.find({});
+    
+    // Store the data in the cache
+    cache.set('categories', categories);
+    
     res.json(categories);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch categories' });
@@ -82,6 +99,10 @@ app.post('/api/categories', async (req, res) => {
       category = new Category({ name, items });
       await category.save();
     }
+    
+    // Invalidate the cache
+    cache.del('categories');
+    
     res.json({ message: 'Category saved', category });
   } catch (err) {
     res.status(500).json({ error: 'Failed to save category' });
@@ -97,28 +118,37 @@ app.post('/api/categories/bulk', async (req, res) => {
   }
 
   try {
+    const promises = [];
     for (const categoryName in bulkData) {
       if (bulkData.hasOwnProperty(categoryName)) {
         const items = bulkData[categoryName];
-        let category = await Category.findOne({ name: categoryName });
+        const promise = (async () => {
+          let category = await Category.findOne({ name: categoryName });
 
-        if (!category) {
-          category = new Category({ name: categoryName, items: [] });
-        }
+          if (!category) {
+            category = new Category({ name: categoryName, items: [] });
+          }
 
-        const existingItems = new Set(category.items.map(item => item.name.toLowerCase()));
+          const existingItems = new Set(category.items.map(item => item.name.toLowerCase()));
 
-        for (const itemName in items) {
-          if (items.hasOwnProperty(itemName)) {
-            const unit = items[itemName];
-            if (!existingItems.has(itemName.toLowerCase())) {
-              category.items.push({ name: itemName, unit: unit });
+          for (const itemName in items) {
+            if (items.hasOwnProperty(itemName)) {
+              const unit = items[itemName];
+              if (!existingItems.has(itemName.toLowerCase())) {
+                category.items.push({ name: itemName, unit: unit });
+              }
             }
           }
-        }
-        await category.save();
+          await category.save();
+        })();
+        promises.push(promise);
       }
     }
+    await Promise.all(promises);
+    
+    // Invalidate the cache
+    cache.del('categories');
+    
     res.json({ message: 'Bulk data added successfully' });
   } catch (err) {
     res.status(500).json({ error: 'Failed to process bulk data.' });
@@ -138,28 +168,37 @@ app.post('/api/categories/bulk-upload', upload.single('file'), async (req, res) 
       return res.status(400).json({ error: 'Invalid data format. Expecting an object of categories.' });
     }
 
+    const promises = [];
     for (const categoryName in bulkData) {
       if (bulkData.hasOwnProperty(categoryName)) {
         const items = bulkData[categoryName];
-        let category = await Category.findOne({ name: categoryName });
+        const promise = (async () => {
+          let category = await Category.findOne({ name: categoryName });
 
-        if (!category) {
-          category = new Category({ name: categoryName, items: [] });
-        }
+          if (!category) {
+            category = new Category({ name: categoryName, items: [] });
+          }
 
-        const existingItems = new Set(category.items.map(item => item.name.toLowerCase()));
+          const existingItems = new Set(category.items.map(item => item.name.toLowerCase()));
 
-        for (const itemName in items) {
-          if (items.hasOwnProperty(itemName)) {
-            const unit = items[itemName];
-            if (!existingItems.has(itemName.toLowerCase())) {
-              category.items.push({ name: itemName, unit: unit });
+          for (const itemName in items) {
+            if (items.hasOwnProperty(itemName)) {
+              const unit = items[itemName];
+              if (!existingItems.has(itemName.toLowerCase())) {
+                category.items.push({ name: itemName, unit: unit });
+              }
             }
           }
-        }
-        await category.save();
+          await category.save();
+        })();
+        promises.push(promise);
       }
     }
+    await Promise.all(promises);
+    
+    // Invalidate the cache
+    cache.del('categories');
+    
     res.json({ message: 'Bulk data added successfully' });
   } catch (err) {
     res.status(500).json({ error: 'Failed to process bulk data.' });
