@@ -209,6 +209,10 @@ app.post('/api/categories/bulk-upload', upload.single('file'), async (req, res) 
 app.delete('/api/categories/:name', async (req, res) => {
   try {
     await Category.deleteOne({ name: req.params.name });
+    
+    // Invalidate the cache
+    cache.del('categories');
+    
     res.json({ message: 'Category deleted' });
   } catch (err) {
     res.status(500).json({ error: 'Failed to delete category' });
@@ -238,6 +242,10 @@ app.post('/api/categories/:name/delete-items', async (req, res) => {
     );
     
     await category.save();
+
+    // Invalidate the cache
+    cache.del('categories');
+    
     res.json({ message: 'Items deleted successfully', category });
   } catch (err) {
     console.error('Error deleting items:', err);
