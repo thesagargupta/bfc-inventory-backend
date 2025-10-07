@@ -38,9 +38,6 @@ const CategorySchema = new mongoose.Schema({
 
 const Category = mongoose.model('Category', CategorySchema);
 
-// In-memory tracking of last submission dates per branch
-const submissionTracker = new Map();
-
 // Helper to get YYYY-MM-DD string
 const getTodayDateString = () => new Date().toISOString().split('T')[0];
 
@@ -257,17 +254,17 @@ app.post('/api/categories/:name/delete-items', async (req, res) => {
 const GOOGLE_SHEETS_CONFIG = {
   'Chandigarh': {
     spreadsheetId: process.env.DELHI_SHEET_ID,
-    range: 'Chandigarh!A:J', // A:J to accommodate Category, Item, Unit, and 7 date columns
+    range: 'Chandigarh!A:R', // A:R to accommodate Category, Item, Unit, and 15 date columns
     sheetName: 'Chandigarh'
   },
   'Delhi': {
     spreadsheetId: process.env.DELHI_SHEET_ID,
-    range: 'Delhi!A:J',
+    range: 'Delhi!A:R', // A:R for 18 columns (3 fixed + 15 dates)
     sheetName: 'Delhi'
   },
   'Gurugram': {
     spreadsheetId: process.env.DELHI_SHEET_ID,
-    range: 'Gurugram!A:J',
+    range: 'Gurugram!A:R', // A:R for 18 columns (3 fixed + 15 dates)
     sheetName: 'Gurugram'
   }
 };
@@ -323,9 +320,9 @@ const ensureSheetExists = async (sheets, spreadsheetId, sheetName) => {
 // Function to initialize sheet with fixed structure and dynamic date columns (from DB)
 const initializeSheetStructure = async (sheets, spreadsheetId, sheetName) => {
   try {
-    // Prepare 7 date columns: today, yesterday, ..., 6 days ago
+    // Prepare 15 date columns: today, yesterday, ..., 14 days ago
     const dateColumns = [];
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 15; i++) {
       dateColumns.push(getDateNDaysAgo(i));
     }
 
@@ -334,18 +331,18 @@ const initializeSheetStructure = async (sheets, spreadsheetId, sheetName) => {
 
     // Create fixed structure with all items from all categories
     const fixedData = [
-      ['Category', 'Item', 'Unit', ...dateColumns.map(date => `${date} (Qty)`)] // Headers with 7 date columns
+      ['Category', 'Item', 'Unit', ...dateColumns.map(date => `${date} (Qty)`)] // Headers with 15 date columns
     ];
 
     // Add all items from all categories
     categories.forEach(categoryDoc => {
       const category = categoryDoc.name;
       categoryDoc.items.forEach(itemObj => {
-        fixedData.push([category, itemObj.name, itemObj.unit, ...Array(7).fill('')]);
+        fixedData.push([category, itemObj.name, itemObj.unit, ...Array(15).fill('')]);
       });
     });
 
-    const range = `${sheetName}!A:J`;
+    const range = `${sheetName}!A:R`; // 18 columns: A-R
     await sheets.spreadsheets.values.update({
       spreadsheetId: spreadsheetId,
       range: range,
@@ -355,17 +352,18 @@ const initializeSheetStructure = async (sheets, spreadsheetId, sheetName) => {
       }
     });
 
-    console.log(`Fixed structure initialized for sheet: ${sheetName} with 7 date columns`);
+    console.log(`✅ Fixed structure initialized for sheet: ${sheetName} with 15 date columns (18 total columns)`);
   } catch (error) {
     console.error(`Error initializing sheet structure for ${sheetName}:`, error);
     throw error;
   }
 };
 
-// Function to manage 7-day rolling data with dynamic date columns (from DB)
+// Function to manage 15-day rolling data with dynamic date columns (from DB)
+// This function preserves existing data and only updates data for the current submission date
 const manageRollingData = async (sheets, spreadsheetId, sheetName, newData) => {
   try {
-    const range = `${sheetName}!A:J`;
+    const range = `${sheetName}!A:R`; // 18 columns: 3 fixed + 15 date columns
 
     // Get current data
     const response = await sheets.spreadsheets.values.get({
@@ -373,7 +371,7 @@ const manageRollingData = async (sheets, spreadsheetId, sheetName, newData) => {
       range: range
     });
 
-    const currentData = response.data.values || [];
+    let currentData = response.data.values || [];
     if (currentData.length === 0 || currentData.length === 1) { // Also check for only headers
       // If no data, or only headers, initialize with fixed structure
       await initializeSheetStructure(sheets, spreadsheetId, sheetName);
@@ -385,66 +383,116 @@ const manageRollingData = async (sheets, spreadsheetId, sheetName, newData) => {
       currentData = reFetchedResponse.data.values || [];
     }
 
-    const headers = currentData[0];
+    const headers = currentData[0] || [];
     const dataRows = currentData.slice(1);
 
-    // Prepare 7 date columns: today, yesterday, ..., 6 days ago
+    console.log(`\n📋 Current sheet has ${headers.length} columns and ${dataRows.length} data rows`);
+
+    // Prepare 15 date columns: today, yesterday, ..., 14 days ago
     const dateColumns = [];
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 15; i++) {
       dateColumns.push(getDateNDaysAgo(i));
     }
     const today = getTodayDateString();
 
-    // Find the index of today's date column
-    const todayColumnIndex = dateColumns.indexOf(today) + 3; // +3 for Category, Item, Unit
+    console.log(`📅 Today's date: ${today}`);
+    console.log(`📅 Date columns to create: [${dateColumns[0]}, ${dateColumns[1]}, ..., ${dateColumns[14]}]`);
 
-    // Create new headers with rolling 7-day date columns
+    // Find the index of today's date column in the new structure
+    const todayColumnIndex = dateColumns.indexOf(today) + 3; // +3 for Category, Item, Unit
+    
+    console.log(`📍 Today's column index will be: ${todayColumnIndex} (column ${String.fromCharCode(65 + todayColumnIndex)})`);
+
+    // Create new headers with rolling 15-day date columns
     const newHeaders = ['Category', 'Item', 'Unit', ...dateColumns.map(date => `${date} (Qty)`)];
 
     // Fetch all categories/items/units from DB
     const allCategories = await mongoose.model('Category').find({});
 
-    // Create a map for quick lookup of existing data
+    // Parse existing data to preserve values
     const existingDataMap = new Map();
     dataRows.forEach(row => {
       const [category, item] = row;
       if (category && item) {
+        // Store the entire row data (preserve all columns including quantities)
         existingDataMap.set(`${category}-${item}`, row);
       }
     });
 
+    console.log(`📦 Found ${existingDataMap.size} existing items in sheet ${sheetName}`);
+
+    // Parse existing headers to map old date columns to new ones
+    const oldDateIndexMap = new Map();
+    if (headers.length > 3) {
+      for (let i = 3; i < headers.length; i++) {
+        const headerText = headers[i];
+        // Extract date from header like "2025-10-07 (Qty)"
+        const dateMatch = headerText.match(/^(\d{4}-\d{2}-\d{2})/);
+        if (dateMatch) {
+          oldDateIndexMap.set(dateMatch[1], i);
+        }
+      }
+    }
+
+    console.log(`🗺️  Old date column mapping: ${Array.from(oldDateIndexMap.entries()).map(([d, i]) => `${d}→col${i}`).join(', ')}`);
+    console.log(`\n🔄 Processing submission for date: ${today}`);
+    console.log(`📝 Updating ${Object.keys(newData).length} items in the submission: [${Object.keys(newData).join(', ')}]\n`);
+
     // Build the final data structure
     const finalData = [newHeaders];
+
+    let updatedCount = 0;
+    let preservedCount = 0;
+    let newItemCount = 0;
 
     allCategories.forEach(categoryDoc => {
       const categoryName = categoryDoc.name;
       categoryDoc.items.forEach(itemObj => {
         const itemKey = `${categoryName}-${itemObj.name}`;
         
-        let row = existingDataMap.get(itemKey);
+        // Create a new row with 18 columns (3 + 15 dates)
+        const newRow = [categoryName, itemObj.name, itemObj.unit, ...Array(15).fill('')];
         
-        if (!row) {
-          // This item doesn't exist in the current sheet data, create a new row
-          row = [categoryName, itemObj.name, itemObj.unit, ...Array(7).fill('')];
-        } else {
-          // It exists, so make sure it has the right number of columns
-          // and shift old data if necessary
-          row.length = 10; // Ensure exactly 10 columns (3 + 7 dates)
-          
-          // Clear the old today's data and shift previous data to the right
-          row.splice(3, 1, ...row.slice(3, 9));
-          row[3] = ''; // Set new today's column to blank initially
+        const existingRow = existingDataMap.get(itemKey);
+        
+        if (existingRow) {
+          // Preserve existing data by mapping old date columns to new date columns
+          dateColumns.forEach((date, newIndex) => {
+            const oldColumnIndex = oldDateIndexMap.get(date);
+            if (oldColumnIndex !== undefined && existingRow[oldColumnIndex] !== undefined && existingRow[oldColumnIndex] !== '') {
+              newRow[3 + newIndex] = existingRow[oldColumnIndex];
+            }
+          });
         }
 
-        // Now, update today's column with the new submitted quantity
+        // Update/merge today's column with the new submitted quantity
+        // Only update if this specific item was submitted in the current request
         const submittedItemData = newData[itemObj.name];
         if (submittedItemData && submittedItemData.quantity) {
-          row[todayColumnIndex] = submittedItemData.quantity;
+          const oldValue = newRow[todayColumnIndex];
+          // Update this item's quantity for today (this will overwrite existing value for today only)
+          newRow[todayColumnIndex] = submittedItemData.quantity;
+          
+          if (oldValue && oldValue !== '') {
+            console.log(`  ✏️  Updated ${itemObj.name}: ${oldValue} → ${submittedItemData.quantity}`);
+            updatedCount++;
+          } else {
+            console.log(`  ➕ Added ${itemObj.name}: ${submittedItemData.quantity}`);
+            newItemCount++;
+          }
+        } else if (existingRow && newRow[todayColumnIndex] && newRow[todayColumnIndex] !== '') {
+          // Item not in submission but has existing value for today - preserve it
+          console.log(`  ✅ Preserved ${itemObj.name}: ${newRow[todayColumnIndex]}`);
+          preservedCount++;
         }
+        // If item is not in newData, preserve existing value (already copied above from existingRow)
 
-        finalData.push(row);
+        finalData.push(newRow);
       });
     });
+
+    console.log(`\n📊 Summary: ${newItemCount} new, ${updatedCount} updated, ${preservedCount} preserved`);
+    console.log(`📏 Final data has ${finalData.length} rows (including header) and ${finalData[0].length} columns\n`);
 
     return { data: { values: finalData } };
   } catch (error) {
@@ -478,7 +526,7 @@ app.post('/update-sheets', async (req, res) => {
     // Ensure the required sheet exists
     await ensureSheetExists(sheets, config.spreadsheetId, config.sheetName);
     
-    // Manage 7-day rolling data
+    // Manage 15-day rolling data with data preservation
     const updatedData = await manageRollingData(sheets, config.spreadsheetId, config.sheetName, data);
     
     // Update the sheet with the processed data
@@ -491,15 +539,13 @@ app.post('/update-sheets', async (req, res) => {
       }
     });
 
-    console.log(`Successfully updated Google Sheets for branch: ${branch} in ${config.sheetName}`);
-
-    // Save submission date for the branch
-    const today = getTodayDateString();
-    submissionTracker.set(branch, today);
+    console.log(`✅ Successfully updated Google Sheets for branch: ${branch} in ${config.sheetName}\n`);
+    console.log(`${'='.repeat(80)}\n`);
 
     res.status(200).json({ 
       message: `Google Sheets updated successfully for ${branch}`,
-      details: `Data maintained for last 7 days with dynamic date columns in ${config.sheetName} sheet`
+      details: `Data maintained for last 15 days with dynamic date columns in ${config.sheetName} sheet. Multiple updates per day are allowed - previous data is preserved.`,
+      updateDate: getTodayDateString()
     });
   } catch (err) {
     console.error('Error updating Google Sheets:', err);
@@ -507,15 +553,6 @@ app.post('/update-sheets', async (req, res) => {
     console.error('Stack trace:', err.stack);
     res.status(500).json({ error: 'Failed to update Google Sheets: ' + err.message });
   }
-});
-
-// Endpoint to fetch last submission date for a branch
-app.get('/last-submission/:branch', (req, res) => {
-  const { branch } = req.params;
-  if (!branch) return res.status(400).json({ error: 'Branch is required' });
-
-  const lastDate = submissionTracker.get(branch) || null;
-  res.status(200).json({ branch, date: lastDate });
 });
 
 // Start server
