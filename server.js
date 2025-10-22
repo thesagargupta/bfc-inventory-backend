@@ -6,6 +6,7 @@ const mongoose = require('mongoose');
 const multer = require('multer');
 const compression = require('compression');
 const NodeCache = require('node-cache');
+const XLSX = require('xlsx');
 
 const app = express();
 const PORT = 5000;
@@ -199,6 +200,116 @@ app.post('/api/categories/bulk-upload', upload.single('file'), async (req, res) 
     res.json({ message: 'Bulk data added successfully' });
   } catch (err) {
     res.status(500).json({ error: 'Failed to process bulk data.' });
+  }
+});
+
+// API: Upload and process Excel file for categories and items
+app.post('/api/categories/excel-upload', upload.single('file'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded.' });
+  }
+
+  try {
+    // Parse Excel file
+    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0]; // Get first sheet
+    const worksheet = workbook.Sheets[sheetName];
+    
+    // Convert to JSON
+    const data = XLSX.utils.sheet_to_json(worksheet);
+    
+    if (!data || data.length === 0) {
+      return res.status(400).json({ error: 'Excel file is empty or invalid format.' });
+    }
+
+    // Validate columns - expect: Category, Item Name, Unit (case-insensitive)
+    const firstRow = data[0];
+    const hasCategory = Object.keys(firstRow).some(key => key.toLowerCase().includes('category'));
+    const hasItemName = Object.keys(firstRow).some(key => key.toLowerCase().includes('item'));
+    const hasUnit = Object.keys(firstRow).some(key => key.toLowerCase().includes('unit'));
+
+    if (!hasCategory || !hasItemName || !hasUnit) {
+      return res.status(400).json({ 
+        error: 'Invalid Excel format. Expected columns: Category, Item Name, Unit',
+        receivedColumns: Object.keys(firstRow)
+      });
+    }
+
+    // Group data by category
+    const categorizedData = {};
+    let processedCount = 0;
+    let skippedCount = 0;
+
+    data.forEach((row) => {
+      // Find the column names (case-insensitive)
+      const categoryKey = Object.keys(row).find(key => key.toLowerCase().includes('category'));
+      const itemKey = Object.keys(row).find(key => key.toLowerCase().includes('item'));
+      const unitKey = Object.keys(row).find(key => key.toLowerCase().includes('unit'));
+
+      const categoryName = row[categoryKey]?.toString().trim();
+      const itemName = row[itemKey]?.toString().trim();
+      const unit = row[unitKey]?.toString().trim();
+
+      // Skip rows with missing data
+      if (!categoryName || !itemName || !unit) {
+        skippedCount++;
+        return;
+      }
+
+      if (!categorizedData[categoryName]) {
+        categorizedData[categoryName] = [];
+      }
+
+      categorizedData[categoryName].push({ name: itemName, unit: unit });
+      processedCount++;
+    });
+
+    // Save to database
+    const promises = [];
+    for (const categoryName in categorizedData) {
+      const items = categorizedData[categoryName];
+      const promise = (async () => {
+        let category = await Category.findOne({ name: categoryName });
+
+        if (!category) {
+          category = new Category({ name: categoryName, items: [] });
+        }
+
+        // Create a map of existing items (case-insensitive)
+        const itemMap = new Map();
+        category.items.forEach(item => {
+          itemMap.set(item.name.trim().toLowerCase(), { name: item.name, unit: item.unit });
+        });
+
+        // Add/update items from Excel
+        items.forEach(newItem => {
+          const key = newItem.name.trim().toLowerCase();
+          itemMap.set(key, { name: newItem.name, unit: newItem.unit });
+        });
+
+        // Save merged items
+        category.items = Array.from(itemMap.values());
+        await category.save();
+      })();
+      promises.push(promise);
+    }
+
+    await Promise.all(promises);
+
+    // Invalidate the cache
+    cache.del('categories');
+
+    res.json({ 
+      message: 'Excel data processed successfully',
+      stats: {
+        categoriesProcessed: Object.keys(categorizedData).length,
+        itemsProcessed: processedCount,
+        itemsSkipped: skippedCount
+      }
+    });
+  } catch (err) {
+    console.error('Excel upload error:', err);
+    res.status(500).json({ error: 'Failed to process Excel file: ' + err.message });
   }
 });
 
